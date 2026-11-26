@@ -1,0 +1,1929 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>あたまでパクパク！</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+  
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      user-select: none;
+      -webkit-user-select: none;
+      background: #000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 100vw;
+      height: 100vh;
+    }
+
+    #game-wrapper {
+      position: relative;
+      width: 1920px;
+      height: 1080px;
+      flex-shrink: 0;
+      transform-origin: center center;
+    }
+
+    #app-bg {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      z-index: -10;
+    }
+    
+    #video-container {
+      position: absolute;
+      width: 240px; height: 180px;
+      bottom: 20px; right: 20px; top: auto; left: auto;
+      border-radius: 14px;
+      border: 4px solid #64748b;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+      opacity: 0; pointer-events: none; overflow: hidden;
+      z-index: 300;
+      transition: opacity 0.3s, border-color 0.2s;
+      background: #0f172a;
+    }
+    #video-container.face-seen {
+      border-color: #4ade80;
+    }
+
+    #cam-preview {
+      width: 100%; height: 100%; display: block;
+    }
+
+    #game-container {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      z-index: 10; pointer-events: none; overflow: hidden;
+    }
+
+    #head-pointer {
+      position: absolute;
+      width: 80px; height: 80px;
+      background: radial-gradient(circle, rgba(255, 255, 255, 0.28) 0%, rgba(255, 255, 255, 0) 70%);
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 11; pointer-events: none;
+      transition: width 0.2s, height 0.2s, background 0.2s;
+    }
+    #head-pointer.looking {
+      width: 110px; height: 110px;
+      background: radial-gradient(circle, rgba(250, 204, 21, 0.45) 0%, rgba(250, 204, 21, 0) 70%);
+    }
+
+    #animal {
+      position: absolute;
+      transform: translate(-50%, -50%);
+      line-height: 1; text-align: center;
+      display: flex; align-items: center; justify-content: center;
+      filter: drop-shadow(0px 6px 10px rgba(0,0,0,0.3));
+      will-change: left, top, transform;
+      z-index: 15; font-size: 160px; 
+    }
+
+    .food-container {
+      position: absolute;
+      transform: translate(-50%, -50%);
+      display: flex; flex-direction: column; align-items: center;
+      z-index: 12;
+      animation: floatFood 2s ease-in-out infinite alternate;
+    }
+
+    @keyframes floatFood {
+      0% { transform: translate(-50%, -50%) translateY(0px); }
+      100% { transform: translate(-50%, -50%) translateY(-8px); }
+    }
+
+    .food-bg {
+      background: rgba(255, 255, 255, 0.9);
+      border-radius: 50%;
+      width: 140px; height: 140px;
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
+      border: 2px solid rgba(255, 255, 255, 1);
+      transition: all 0.2s ease-out;
+    }
+    .food-bg.snapped {
+      border: 4px solid #ef4444;
+      box-shadow: 0 0 20px rgba(239, 68, 68, 0.9);
+      transform: scale(1.15);
+    }
+
+    .food-emoji { font-size: 90px; line-height: 1; }
+
+    #ui-bottom {
+      position: absolute; bottom: 40px; left: 50%;
+      transform: translateX(-50%); z-index: 20;
+      width: 80%; max-width: 600px;
+      background: rgba(255, 255, 255, 0.9); padding: 20px 40px;
+      border-radius: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+      text-align: center; pointer-events: none;
+    }
+
+    .fullness-bar-container {
+      position: relative;
+      width: 100%; height: 44px; background-color: #e5e7eb;
+      border-radius: 12px; margin-top: 8px; overflow: hidden;
+      border: 3px solid #d1d5db;
+    }
+    
+    .fullness-bar {
+      height: 100%; width: 0%;
+      background: linear-gradient(90deg, #f59e0b, #ef4444);
+      border-radius: 8px; transition: width 0.3s ease-out;
+    }
+
+    .fullness-bar-text {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.5rem;
+      font-weight: 900;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      color: #000000;
+      text-shadow: 0 0 6px rgba(255, 255, 255, 0.85);
+      pointer-events: none;
+      z-index: 2;
+      line-height: 1;
+    }
+
+    .control-btn {
+      background: rgba(31, 41, 55, 0.9); color: white;
+      border-radius: 9999px; padding: 16px 24px; font-weight: bold; font-size: 1.25rem;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.3); cursor: pointer; pointer-events: auto;
+      border: 2px solid rgba(255, 255, 255, 0.2);
+      transition: transform 0.1s, background-color 0.1s;
+    }
+    .control-btn:active { transform: scale(0.95); background: rgba(17, 24, 39, 0.9); }
+
+    .evolution-text {
+      position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+      font-size: 4rem; font-weight: bold; color: #fbbf24;
+      text-shadow: 0 4px 8px rgba(0,0,0,0.5), 0 0 20px rgba(250,204,21,0.8);
+      z-index: 30; pointer-events: none; opacity: 0;
+      animation: evolveAnim 2s forwards;
+    }
+    .milestone-text {
+      position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+      font-size: 4.5rem; font-weight: 900; color: #fde047;
+      text-shadow: 0 6px 14px rgba(0,0,0,0.65), 0 0 24px rgba(250,204,21,0.85);
+      white-space: nowrap;
+      z-index: 31; pointer-events: none; opacity: 0;
+      animation: evolveAnim 1.8s forwards;
+    }
+    @keyframes evolveAnim {
+      0% { opacity: 0; transform: translate(-50%, -50%) scale(0.5); }
+      20% { opacity: 1; transform: translate(-50%, -50%) scale(1.2); }
+      40% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+      80% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+      100% { opacity: 0; transform: translate(-50%, -50%) scale(1.5); }
+    }
+
+    .countdown-number {
+      font-size: 16rem;
+      font-weight: 900;
+      color: #fde047;
+      text-shadow: 0 8px 24px rgba(0, 0, 0, 0.65), 0 0 40px rgba(250, 204, 21, 0.85);
+      line-height: 1;
+      animation: countdownPop 0.9s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    }
+    .countdown-go {
+      font-size: 10rem;
+      font-weight: 900;
+      color: #4ade80;
+      text-shadow: 0 8px 24px rgba(0, 0, 0, 0.65), 0 0 40px rgba(74, 222, 128, 0.85);
+      line-height: 1;
+      animation: countdownGoAnim 0.65s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    }
+    @keyframes countdownPop {
+      0% { opacity: 0; transform: scale(1.7); }
+      20% { opacity: 1; transform: scale(0.95); }
+      35% { opacity: 1; transform: scale(1); }
+      85% { opacity: 1; transform: scale(1); }
+      100% { opacity: 0.25; transform: scale(0.85); }
+    }
+    @keyframes countdownGoAnim {
+      0% { opacity: 0; transform: scale(0.5); }
+      25% { opacity: 1; transform: scale(1.15); }
+      45% { opacity: 1; transform: scale(1); }
+      75% { opacity: 1; transform: scale(1); }
+      100% { opacity: 0; transform: scale(1.35); }
+    }
+    
+    .screen {
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(15, 23, 42, 0.9); z-index: 50;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      color: white; text-align: center; padding: 20px;
+    }
+
+    #settings-panel input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      height: 18px;
+      border-radius: 9999px;
+      background: #4b5563;
+      outline: none;
+      cursor: pointer;
+    }
+    #settings-panel input[type="range"]:disabled {
+      cursor: not-allowed;
+    }
+    #settings-panel input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 38px;
+      height: 38px;
+      border-radius: 50%;
+      background: currentColor;
+      border: 4px solid #ffffff;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+      cursor: pointer;
+    }
+    #settings-panel input[type="range"]::-moz-range-thumb {
+      width: 38px;
+      height: 38px;
+      border-radius: 50%;
+      background: currentColor;
+      border: 4px solid #ffffff;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+      cursor: pointer;
+    }
+
+  </style>
+</head>
+<body>
+  <div id="game-wrapper">
+  <div id="app-bg"></div>
+
+  <div id="video-container">
+    <canvas id="cam-preview" width="240" height="180"></canvas>
+    <div id="cam-badge" class="hidden absolute bottom-1.5 left-1/2 -translate-x-1/2 bg-black/75 text-yellow-300 text-xs font-bold px-2 py-0.5 rounded whitespace-nowrap">いちばん手前の人</div>
+    <div id="cam-lost-overlay" class="hidden absolute inset-0 bg-slate-900/75 flex items-center justify-center text-red-300 font-bold text-base text-center px-2 leading-snug">かおが見えません</div>
+  </div>
+  <video id="video" playsinline muted style="display:none;"></video>
+
+  <div id="game-container">
+    <div id="head-pointer"></div>
+    <div id="foods-layer"></div>
+    <div id="animal">🐶</div>
+  </div>
+
+  <div id="ui-bottom" style="display: none;">
+    <div class="font-bold text-gray-700 text-3xl mb-2">満腹ゲージ</div>
+    <div class="fullness-bar-container">
+      <div id="fullness-bar" class="fullness-bar"></div>
+      <div id="fullness-text" class="fullness-bar-text">0 / 30</div>
+    </div>
+  </div>
+
+  <!-- 右上の操作ボタン（タイトル・プレイ中共通） -->
+  <div id="controls-container" style="display: flex; position: absolute; top: 20px; right: 20px; z-index: 120; flex-direction: column; gap: 10px; align-items: flex-end; pointer-events: none;">
+    <button id="settings-btn" class="control-btn">⚙ 設定</button>
+    <button id="reset-center-btn" class="control-btn">🎯 まんなかにする</button>
+    <button id="back-to-title-btn" class="control-btn" style="display: none;">🏠 タイトルへ戻る</button>
+  </div>
+
+  <!-- 1. カメラ再試行画面（自動起動失敗時のみ表示） -->
+  <div id="pre-start-screen" class="screen" style="display: none; z-index: 60;">
+    <div class="text-8xl mb-8">🐶➡️👼</div>
+    <h1 class="text-6xl md:text-7xl font-extrabold mb-6 text-yellow-300">あたまでパクパク！</h1>
+    <p class="mb-10 text-2xl text-gray-300 max-w-2xl">
+      カメラに向かって頭を動かしてキャラクターを操作し、ご飯を食べよう！（映像は端末内だけで処理されます）
+    </p>
+    <button id="pre-start-btn" class="bg-blue-500 hover:bg-blue-600 transition text-white font-bold py-6 px-12 rounded-full text-3xl shadow-lg transform hover:scale-105">
+      カメラを許可して進む
+    </button>
+  </div>
+
+  <!-- 2. ロード画面 -->
+  <div id="loading-screen" class="screen" style="display: none;">
+    <div class="animate-spin rounded-full h-24 w-24 border-t-8 border-b-8 border-blue-400 mb-8"></div>
+    <p class="text-4xl font-bold">顔認識AIを読み込み中...</p>
+    <p class="text-xl text-gray-400 mt-4">※初回は少し時間がかかります</p>
+  </div>
+
+  <!-- 3. タイトル・練習画面 -->
+  <div id="start-screen" class="screen" style="display: flex; background: transparent; justify-content: space-between; padding-top: 28px; padding-bottom: 40px; pointer-events: none;">
+    <div id="title-header" class="bg-slate-900/80 backdrop-blur-md border-4 border-yellow-300/80 rounded-[2rem] px-12 py-4 shadow-[0_10px_30px_rgba(0,0,0,0.28)] flex flex-col items-center gap-1.5">
+      <div class="flex items-center gap-5">
+        <span class="text-6xl">🐶</span>
+        <h1 class="text-6xl font-extrabold tracking-wider text-yellow-300 drop-shadow-[0_3px_6px_rgba(0,0,0,0.6)]">あたまでパクパク！</h1>
+        <span class="text-6xl">👼</span>
+      </div>
+      <p class="text-2xl font-bold text-slate-200">あたまをうごかして ごはんをたべよう！</p>
+    </div>
+    <button id="start-btn" style="pointer-events: auto;" class="bg-yellow-500 hover:bg-yellow-400 text-black transition font-bold py-6 px-14 rounded-full text-4xl shadow-[0_0_25px_rgba(250,204,21,0.7)] transform hover:scale-105 flex items-center justify-center gap-4 border-4 border-yellow-200">
+      <span class="text-5xl">🎮</span>
+      <span>スタート</span>
+    </button>
+  </div>
+
+  <!-- 3.5 設定モーダル（設定ボタンを押した時のみ表示） -->
+  <div id="settings-modal" class="screen" style="display: none; z-index: 250; background: rgba(15, 23, 42, 0.78);">
+    <div id="settings-panel" class="bg-slate-900/95 border-4 border-gray-600 rounded-[2rem] p-10 max-w-[1680px] w-full shadow-2xl text-left">
+      <div class="flex items-center justify-between mb-8">
+        <h2 class="text-5xl font-extrabold text-yellow-300">⚙ あそびの設定</h2>
+        <button id="close-settings-btn" class="bg-gray-700 hover:bg-gray-600 text-white font-bold py-4 px-10 rounded-full text-3xl border-2 border-gray-400 transition shadow-lg">✕ とじる</button>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <!-- あたまの動き設定パネル -->
+        <div class="bg-gray-800 p-8 rounded-3xl border-2 border-gray-600">
+          <h3 class="text-4xl font-bold mb-6 text-white flex items-center gap-3">🙂 あたまの動き</h3>
+          <div class="space-y-6">
+            <div class="flex items-center gap-4">
+              <span class="text-3xl w-44 shrink-0 text-gray-300 font-bold">感度(横)</span>
+              <input type="range" id="sens-x-slider" min="2" max="200" step="1" value="14" class="flex-1 text-yellow-400">
+              <span id="sens-x-val" class="text-3xl w-24 shrink-0 font-mono text-white text-right font-bold">14</span>
+            </div>
+            <div class="flex items-center gap-4">
+              <span class="text-3xl w-44 shrink-0 text-gray-300 font-bold">感度(縦)</span>
+              <input type="range" id="sens-y-slider" min="2" max="200" step="1" value="14" class="flex-1 text-yellow-400">
+              <span id="sens-y-val" class="text-3xl w-24 shrink-0 font-mono text-white text-right font-bold">14</span>
+            </div>
+            <div class="flex items-center gap-4">
+              <span class="text-3xl w-44 shrink-0 text-gray-300 font-bold">不感帯</span>
+              <input type="range" id="dead-slider" min="0" max="10" step="1" value="0" class="flex-1 text-yellow-400">
+              <span id="dead-val" class="text-3xl w-24 shrink-0 font-mono text-white text-right font-bold">0</span>
+            </div>
+            <div class="flex items-center gap-4">
+              <span class="text-3xl w-44 shrink-0 text-gray-300 font-bold">なめらかさ</span>
+              <input type="range" id="smooth-slider" min="1" max="10" step="1" value="5" class="flex-1 text-green-400">
+              <span id="smooth-val" class="text-3xl w-24 shrink-0 font-mono text-white text-right font-bold">5</span>
+            </div>
+            <div class="flex items-center gap-4">
+              <span class="text-3xl w-44 shrink-0 text-gray-300 font-bold">ぶれ軽減</span>
+              <input type="range" id="jitter-slider" min="0" max="50" step="1" value="5" class="flex-1 text-cyan-400">
+              <span id="jitter-val" class="text-3xl w-24 shrink-0 font-mono text-white text-right font-bold">5</span>
+            </div>
+            <div class="flex items-center gap-4 pt-1">
+              <span class="text-3xl w-44 shrink-0 text-gray-300 font-bold">左右反転</span>
+              <label class="flex items-center cursor-pointer gap-3 py-1">
+                <input type="checkbox" id="flip-x-checkbox" class="w-10 h-10 accent-yellow-500 cursor-pointer rounded">
+                <span id="flip-x-val" class="text-3xl font-bold text-white">通常</span>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <!-- ゲーム・カメラ・音声パネル -->
+        <div class="bg-gray-800 p-8 rounded-3xl border-2 border-gray-600">
+          <h3 class="text-4xl font-bold text-white mb-6 flex items-center gap-3">🎮 ゲーム・カメラ・音声</h3>
+          <div class="space-y-6">
+            <div class="flex items-center gap-4">
+              <span class="text-3xl w-48 shrink-0 text-gray-300 font-bold whitespace-nowrap">吸い付き</span>
+              <label class="flex items-center cursor-pointer gap-2 shrink-0">
+                <input type="checkbox" id="assist-enabled-checkbox" checked class="w-10 h-10 accent-pink-500 cursor-pointer rounded">
+                <span id="assist-enabled-val" class="text-3xl font-bold text-pink-400 w-16">ON</span>
+              </label>
+              <input type="range" id="assist-slider" min="50" max="400" step="10" value="280" class="flex-1 min-w-[140px] text-pink-400">
+              <span id="assist-val" class="text-3xl w-24 shrink-0 font-mono text-white text-right font-bold">280</span>
+            </div>
+            <div class="flex items-center gap-4">
+              <span class="text-3xl w-48 shrink-0 text-gray-300 font-bold whitespace-nowrap">進化条件</span>
+              <input type="range" id="goal-slider" min="1" max="50" step="1" value="30" class="flex-1 text-blue-400">
+              <span id="goal-val" class="text-3xl w-24 shrink-0 font-mono text-white text-right font-bold">30個</span>
+            </div>
+            <div class="flex items-center gap-4">
+              <span class="text-3xl w-48 shrink-0 text-gray-300 font-bold whitespace-nowrap">ご飯の数</span>
+              <input type="range" id="food-count-slider" min="1" max="5" step="1" value="3" class="flex-1 text-orange-400">
+              <span id="food-count-val" class="text-3xl w-24 shrink-0 font-mono text-white text-right font-bold">3個</span>
+            </div>
+            <div class="flex items-center gap-4">
+              <span class="text-3xl w-48 shrink-0 text-gray-300 font-bold whitespace-nowrap">ご飯のサイズ</span>
+              <input type="range" id="food-size-slider" min="50" max="200" step="5" value="100" class="flex-1 text-amber-400">
+              <span id="food-size-val" class="text-3xl w-24 shrink-0 font-mono text-white text-right font-bold">100%</span>
+            </div>
+            <div class="flex items-center gap-4">
+              <span class="text-3xl w-48 shrink-0 text-gray-300 font-bold whitespace-nowrap">BGM音量</span>
+              <input type="range" id="bgm-volume-slider" min="0" max="100" step="1" value="70" class="flex-1 text-purple-400">
+              <span id="bgm-volume-val" class="text-3xl w-24 shrink-0 font-mono text-white text-right font-bold">70%</span>
+            </div>
+            <div class="flex items-center gap-4">
+              <span class="text-3xl w-48 shrink-0 text-gray-300 font-bold whitespace-nowrap">SE音量</span>
+              <input type="range" id="se-volume-slider" min="0" max="100" step="1" value="70" class="flex-1 text-teal-400">
+              <span id="se-volume-val" class="text-3xl w-24 shrink-0 font-mono text-white text-right font-bold">70%</span>
+            </div>
+            <div class="flex flex-wrap items-center gap-8 pt-1">
+              <label class="flex items-center cursor-pointer gap-3 py-1">
+                <input type="checkbox" id="camera-checkbox" checked class="w-10 h-10 accent-green-500 cursor-pointer rounded">
+                <span class="text-3xl text-gray-300 font-bold">カメラ映像:</span>
+                <span id="camera-val" class="text-3xl font-bold text-white">表示する</span>
+              </label>
+            </div>
+            <div class="flex items-center gap-5 pt-2">
+              <button id="reset-center-btn-settings" class="text-3xl font-bold bg-indigo-700 hover:bg-indigo-600 text-white py-5 px-6 rounded-2xl border-2 border-indigo-400 transition flex-1 shadow-lg">
+                🎯 まんなかにする
+              </button>
+              <button id="reset-settings-btn" class="text-3xl font-bold bg-red-900 hover:bg-red-800 text-white py-5 px-6 rounded-2xl border-2 border-red-500 transition flex-1 shadow-lg">
+                🔄 初期値に戻す
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 4. カウントダウン表示 -->
+  <div id="countdown-overlay" class="screen" style="display: none; background: rgba(15, 23, 42, 0.35); z-index: 45; pointer-events: none;">
+    <div id="countdown-text" class="countdown-number">3</div>
+  </div>
+
+  <!-- 5. クリア画面 -->
+  <div id="clear-screen" class="screen" style="display: none;">
+    <div class="text-9xl mb-8 animate-bounce">👼🌈🎉</div>
+    <h1 class="text-7xl md:text-8xl font-extrabold mb-10 text-yellow-300 drop-shadow-lg">GAME CLEAR!</h1>
+    <div class="flex flex-col md:flex-row gap-6 mt-6">
+      <button id="restart-btn" class="bg-white text-pink-500 hover:bg-gray-100 transition font-bold py-6 px-12 rounded-full text-3xl shadow-lg transform hover:scale-105">もう一度遊ぶ</button>
+      <button id="clear-back-to-title-btn" class="bg-pink-600 text-white hover:bg-pink-700 transition font-bold py-6 px-12 rounded-full text-3xl shadow-lg transform hover:scale-105 border-2 border-white/30">🏠 タイトルへ戻る</button>
+    </div>
+  </div>
+
+  <!-- 6. 全画面プロンプト画面 -->
+  <div id="fullscreen-prompt-screen" class="screen" style="display: none; z-index: 9998; background: rgba(0, 0, 0, 0.85); cursor: pointer;">
+    <div class="text-9xl mb-8 animate-pulse">⚠️</div>
+    <h2 id="prompt-title" class="text-7xl font-bold text-yellow-300 mb-8 drop-shadow-lg">ゲーム一時停止中</h2>
+    <p class="text-4xl text-white font-bold drop-shadow">画面をクリックして全画面表示に戻ってください</p>
+  </div>
+  </div>
+
+  <button id="fullscreen-btn" class="fixed top-4 left-4 z-[9999] bg-gray-800/80 hover:bg-gray-700/80 text-white rounded-full w-8 h-8 flex items-center justify-center backdrop-blur-md shadow-[0_0_15px_rgba(255,255,255,0.2)] border border-gray-500 cursor-pointer opacity-30 hover:opacity-100 transition-opacity duration-300">
+    <svg id="fs-icon-enter" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-4 h-4">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15" />
+    </svg>
+    <svg id="fs-icon-exit" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-4 h-4 hidden">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M9 9V4.5M9 9H4.5M9 9L3.75 3.75M9 15v4.5M9 15H4.5M9 15l-5.25 5.25M15 9h4.5M15 9V4.5M15 9l5.25-5.25M15 15h4.5M15 15v4.5m0-4.5l5.25 5.25" />
+    </svg>
+  </button>
+
+  <script>
+    let isAiLoaded = false;
+    const GAME_WIDTH = 1920;
+    const GAME_HEIGHT = 1080;
+
+    const gameWrapper = document.getElementById('game-wrapper');
+    function resizeGame() {
+      const scaleX = window.innerWidth / GAME_WIDTH;
+      const scaleY = window.innerHeight / GAME_HEIGHT;
+      const scale = Math.min(scaleX, scaleY);
+      gameWrapper.style.transform = `scale(${scale})`;
+      document.documentElement.style.setProperty('--game-scale', scale);
+    }
+    window.addEventListener('resize', resizeGame);
+    resizeGame();
+
+    const ANIMAL_DATA = [
+      { emoji: '🐶', foods: ['🦴', '🍖', '🥩'], bg: 'linear-gradient(135deg, #ddd6fe, #a78bfa)' },
+      { emoji: '🐱', foods: ['🐟', '🐠', '🥛', '🐁'], bg: 'linear-gradient(135deg, #bfdbfe, #60a5fa)' },
+      { emoji: '🐵', foods: ['🍌', '🍑', '🥜', '🍎'], bg: 'linear-gradient(135deg, #a7f3d0, #34d399)' },
+      { emoji: '🧑', foods: ['🍙', '🍔', '🍣', '☕'], bg: 'linear-gradient(135deg, #fde68a, #f59e0b)' },
+      { emoji: '👼', foods: ['🌟', '☁️', '🍰', '🌈'], bg: 'linear-gradient(135deg, #fef08a, #7dd3fc)' }
+    ];
+    let currentAnimalIndex = 0;
+    let fullness = 0;
+
+    const centerX = GAME_WIDTH / 2;
+    const centerY = GAME_HEIGHT / 2;
+    const animalState = { x: centerX, y: centerY };
+
+    let isTitleScreen = false, isGameStarted = false, isGameCleared = false, isPaused = false;
+    const COUNTDOWN_DURATION_MS = 3000;
+    let isCountingDown = false;
+    let countdownRemainingMs = 0;
+    let countdownLastStep = 0;
+    let countdownIntervalId = null;
+    let countdownLastTickTime = 0;
+    let countdownGoHideTimer = null;
+
+    const BASE_FOOD_BG_SIZE = 140;
+    const BASE_FOOD_EMOJI_SIZE = 90;
+    const FOOD_SIZE_MIN = 50;
+    const FOOD_SIZE_MAX = 200;
+    const BASE_ANIMAL_RADIUS = 75;
+    let fullnessResetTimer = null;
+
+    // Default Settings
+    let gainX = 14, gainY = 14;
+    let deadzoneLevel = 0;
+    let smoothingLevel = 5;
+    let jitterLevel = 5;
+    let reverseX = false;
+    let showCamera = true;
+    let assistEnabled = true;
+    let assistRadius = 280;
+    let requiredFullness = 30;
+    let maxFoodsOnScreen = 3;
+    let foodSizePercent = 100;
+    let bgmVolumeLevel = 70;
+    let seVolumeLevel = 70;
+    let currentSnappedFood = null;
+
+    let isSettingsOpen = false;
+    let pausedBySettings = false;
+
+    // Camera & FaceLandmarker state (from sub_6a6d1b2a78cfa.html)
+    let landmarker = null;
+    let calib = null;
+    let rawHead = null;
+    let faceSeen = false;
+    let faceBox = null;
+    let faceCount = 0;
+    let lastVideoTime = -1;
+    let lastTick = 0;
+    let frameScale = 1;
+
+    const FACE_HOLD_BONUS = 1.25;
+    const FACE_LOST_MS = 700;
+    let faceLostAt = 0, lockedFace = null;
+
+    class OneEuroFilter {
+      constructor() { this.reset(); }
+      reset() { this.xPrev = null; this.dxPrev = 0; this.tPrev = null; }
+      alpha(cutoff, dt) {
+        const tau = 1 / (2 * Math.PI * Math.max(0.001, cutoff));
+        return 1 / (1 + tau / Math.max(1e-4, dt));
+      }
+      filter(x, tSec, minCutoff, beta, dCutoff = 1.0, velDeadzone = 0) {
+        if (this.tPrev === null || this.xPrev === null) {
+          this.xPrev = x; this.dxPrev = 0; this.tPrev = tSec;
+          return x;
+        }
+        const dt = Math.max(1 / 120, Math.min(0.2, tSec - this.tPrev));
+        const dx = (x - this.xPrev) / dt;
+        const edx = this.dxPrev + this.alpha(dCutoff, dt) * (dx - this.dxPrev);
+        const speedAboveDead = Math.max(0, Math.abs(edx) - velDeadzone);
+        const cutoff = minCutoff + beta * speedAboveDead;
+        const xHat = this.xPrev + this.alpha(cutoff, dt) * (x - this.xPrev);
+        this.xPrev = xHat; this.dxPrev = edx; this.tPrev = tSec;
+        return xHat;
+      }
+    }
+
+    const targetFilterX = new OneEuroFilter();
+    const targetFilterY = new OneEuroFilter();
+    const headHistoryX = [];
+    const headHistoryY = [];
+    let stableTarget = null;
+    let headSampleUpdated = false;
+    let lastHeadSampleSec = 0;
+
+    function medianOfLast3(arr, val) {
+      arr.push(val);
+      if (arr.length > 3) arr.shift();
+      if (arr.length < 3) return val;
+      const [a, b, c] = arr;
+      return a + b + c - Math.min(a, b, c) - Math.max(a, b, c);
+    }
+
+    function resetStabilizer(clearHistory = false) {
+      targetFilterX.reset();
+      targetFilterY.reset();
+      stableTarget = null;
+      headSampleUpdated = true;
+      if (clearHistory) {
+        headHistoryX.length = 0;
+        headHistoryY.length = 0;
+      }
+    }
+
+    const foods = [];
+
+    const animalEl = document.getElementById('animal');
+    const headPointerEl = document.getElementById('head-pointer');
+    const foodsLayer = document.getElementById('foods-layer');
+    const fullnessBarEl = document.getElementById('fullness-bar');
+    const fullnessTextEl = document.getElementById('fullness-text');
+    const videoElement = document.getElementById('video');
+    const camPreviewCanvas = document.getElementById('cam-preview');
+    const camPreviewCtx = camPreviewCanvas.getContext('2d');
+    const videoContainer = document.getElementById('video-container');
+    const camBadgeEl = document.getElementById('cam-badge');
+    const camLostOverlayEl = document.getElementById('cam-lost-overlay');
+    const controlsContainer = document.getElementById('controls-container');
+    const backToTitleBtn = document.getElementById('back-to-title-btn');
+    const settingsModal = document.getElementById('settings-modal');
+    let isFlipped = false, lastFlipX = animalState.x;
+
+    let eatSynth, fmSynth, noiseSynth, uiSynth;
+    let lastEatTime = 0;
+    let lastSePreviewTime = 0;
+
+    const BGM_TRACKS = {
+      title: encodeURI('./ゆったり、まったり.mp3'),
+      game: encodeURI("./Don't_stop.mp3")
+    };
+    const BGM_MAX_VOLUME = 0.55;
+    const bgmPlayers = {
+      title: new Audio(BGM_TRACKS.title),
+      game: new Audio(BGM_TRACKS.game)
+    };
+    Object.values(bgmPlayers).forEach((audio) => {
+      audio.loop = true;
+      audio.preload = 'auto';
+    });
+
+    const ANIMAL_SE_TRACKS = {
+      0: encodeURI('./犬の鳴き声1.mp3'),
+      1: encodeURI('./猫の鳴き声1.mp3'),
+      2: encodeURI('./サルの鳴き声1.wav'),
+      3: encodeURI('./食べ物をパクッ.mp3'),
+      4: encodeURI('./天使のキラキラ1.wav')
+    };
+    const animalSePlayers = {
+      0: new Audio(ANIMAL_SE_TRACKS[0]),
+      1: new Audio(ANIMAL_SE_TRACKS[1]),
+      2: new Audio(ANIMAL_SE_TRACKS[2]),
+      3: new Audio(ANIMAL_SE_TRACKS[3]),
+      4: new Audio(ANIMAL_SE_TRACKS[4])
+    };
+    Object.values(animalSePlayers).forEach((audio) => {
+      audio.preload = 'auto';
+    });
+
+    function applyBgmVolume() {
+      const vol = Math.max(0, Math.min(1, bgmVolumeLevel / 100));
+      for (const audio of Object.values(bgmPlayers)) {
+        audio.muted = (vol === 0);
+        audio.volume = vol * BGM_MAX_VOLUME;
+      }
+    }
+
+    function applySeVolume() {
+      const vol = Math.max(0, Math.min(1, seVolumeLevel / 100));
+      for (const audio of Object.values(animalSePlayers)) {
+        audio.muted = (vol <= 0);
+        audio.volume = vol;
+      }
+      if (typeof Tone === 'undefined' || !Tone.Destination) return;
+      try {
+        if (vol <= 0) {
+          Tone.Destination.mute = true;
+        } else {
+          Tone.Destination.mute = false;
+          Tone.Destination.volume.value = Tone.gainToDb(vol);
+        }
+      } catch (e) {}
+    }
+
+    function getDesiredBgmKey() {
+      if (document.hidden) return null;
+      if (document.getElementById('pre-start-screen').style.display === 'flex') return null;
+      if (document.getElementById('fullscreen-prompt-screen').style.display === 'flex') return null;
+      if (isGameCleared) return 'title';
+      if (isTitleScreen) return 'title';
+      if (isGameStarted) return 'game';
+      return null;
+    }
+
+    function syncBgm({ restart = false } = {}) {
+      applyBgmVolume();
+      const desiredKey = getDesiredBgmKey();
+
+      for (const [key, audio] of Object.entries(bgmPlayers)) {
+        if (key !== desiredKey) {
+          audio.pause();
+          if (desiredKey !== null || (key === 'game' && (!isGameStarted || isGameCleared)) || (key === 'title' && !isTitleScreen && !isGameCleared)) {
+            audio.currentTime = 0;
+          }
+        }
+      }
+
+      if (!desiredKey) return;
+
+      const targetAudio = bgmPlayers[desiredKey];
+      if (restart) {
+        targetAudio.currentTime = 0;
+      }
+      if (targetAudio.paused) {
+        const playPromise = targetAudio.play();
+        if (playPromise && typeof playPromise.catch === 'function') {
+          playPromise.catch(() => {});
+        }
+      }
+    }
+
+    function initAudio() {
+      if (eatSynth) return;
+      eatSynth = new Tone.Synth().toDestination(); eatSynth.volume.value = -5;
+      fmSynth = new Tone.FMSynth().toDestination(); fmSynth.volume.value = -5;
+      noiseSynth = new Tone.NoiseSynth().toDestination(); noiseSynth.volume.value = -10;
+      uiSynth = new Tone.PolySynth(Tone.Synth).toDestination(); uiSynth.volume.value = -5;
+    }
+
+    function playEatSound(idx) {
+      if (seVolumeLevel <= 0) return;
+      const now = (typeof Tone !== 'undefined' && Tone.now) ? Tone.now() : (performance.now() / 1000);
+      if (now < lastEatTime + 0.1) return;
+      lastEatTime = now;
+
+      const seAudio = animalSePlayers[idx];
+      if (seAudio) {
+        try {
+          const vol = Math.max(0, Math.min(1, seVolumeLevel / 100));
+          seAudio.muted = (vol <= 0);
+          seAudio.volume = vol;
+          seAudio.currentTime = 0;
+          const playPromise = seAudio.play();
+          if (playPromise && typeof playPromise.catch === 'function') {
+            playPromise.catch(() => {});
+          }
+        } catch (e) {}
+        return;
+      }
+
+      if (!eatSynth) return;
+      try {
+        switch(idx) {
+          case 2:
+            fmSynth.oscillator.type = "triangle";
+            fmSynth.modulationIndex.value = 4;
+            fmSynth.triggerAttackRelease("G5", "16n", now);
+            fmSynth.frequency.rampTo("D6", 0.08, now);
+            break;
+          case 3: fmSynth.oscillator.type = "triangle"; fmSynth.modulationIndex.value = 3; fmSynth.triggerAttackRelease("D4", "8n", now); break;
+          case 4: uiSynth.set({ oscillator: { type: "sine" } }); uiSynth.triggerAttackRelease("C6", "32n", now); uiSynth.triggerAttackRelease("E6", "32n", now + 0.05); uiSynth.triggerAttackRelease("G6", "32n", now + 0.1); break;
+        }
+      } catch (e) {}
+    }
+
+    function playEvolveSound() {
+      if (!uiSynth || seVolumeLevel <= 0) return;
+      try { uiSynth.set({ oscillator: { type: "square" } }); uiSynth.triggerAttackRelease("C5", "16n"); uiSynth.triggerAttackRelease("E5", "16n", "+0.1"); uiSynth.triggerAttackRelease("G5", "16n", "+0.2"); uiSynth.triggerAttackRelease("C6", "4n", "+0.3"); } catch (e) {}
+    }
+    function playClearSound() {
+      if (!uiSynth || seVolumeLevel <= 0) return;
+      try { uiSynth.set({ oscillator: { type: "triangle" } }); uiSynth.triggerAttackRelease("G4", "8n"); uiSynth.triggerAttackRelease("C5", "8n", "+0.15"); uiSynth.triggerAttackRelease("E5", "8n", "+0.3"); uiSynth.triggerAttackRelease("C5", "16n", "+0.45"); uiSynth.triggerAttackRelease("E5", "16n", "+0.6"); uiSynth.triggerAttackRelease("G5", "2n", "+0.75"); } catch (e) {}
+    }
+
+    function playSePreviewSound() {
+      if (!uiSynth || seVolumeLevel <= 0) return;
+      const now = Tone.now();
+      if (now < lastSePreviewTime + 0.12) return;
+      lastSePreviewTime = now;
+      try {
+        uiSynth.set({ oscillator: { type: "sine" } });
+        uiSynth.triggerAttackRelease("C6", "32n", now);
+      } catch (e) {}
+    }
+
+    function playCountdownSound(step) {
+      if (!uiSynth || seVolumeLevel <= 0) return;
+      try {
+        uiSynth.set({ oscillator: { type: "triangle" } });
+        if (step > 0) {
+          uiSynth.triggerAttackRelease("G5", "16n");
+        } else {
+          uiSynth.triggerAttackRelease(["C5", "E5", "G5", "C6"], "8n");
+        }
+      } catch (e) {}
+    }
+
+    function showCountdownStep(text, isGo = false) {
+      const overlay = document.getElementById('countdown-overlay');
+      const textEl = document.getElementById('countdown-text');
+      if (!overlay || !textEl) return;
+      overlay.style.display = 'flex';
+      overlay.style.background = isGo ? 'transparent' : 'rgba(15, 23, 42, 0.35)';
+      textEl.style.animation = 'none';
+      textEl.className = isGo ? 'countdown-go' : 'countdown-number';
+      textEl.innerText = text;
+      void textEl.offsetWidth;
+      textEl.style.animation = '';
+    }
+
+    function cancelCountdown() {
+      isCountingDown = false;
+      countdownRemainingMs = 0;
+      countdownLastStep = 0;
+      if (countdownIntervalId) {
+        clearInterval(countdownIntervalId);
+        countdownIntervalId = null;
+      }
+      if (countdownGoHideTimer) {
+        clearTimeout(countdownGoHideTimer);
+        countdownGoHideTimer = null;
+      }
+      const overlay = document.getElementById('countdown-overlay');
+      if (overlay) {
+        overlay.style.display = 'none';
+        overlay.style.background = 'rgba(15, 23, 42, 0.35)';
+      }
+    }
+
+    function updateAnimalTheme() {
+      animalEl.innerText = ANIMAL_DATA[currentAnimalIndex].emoji;
+      document.getElementById('app-bg').style.background = ANIMAL_DATA[currentAnimalIndex].bg;
+    }
+    updateAnimalTheme();
+
+    function updateFullnessUI(displayCount = fullness) {
+      const clampedCount = Math.max(0, Math.min(requiredFullness, displayCount));
+      const pct = requiredFullness > 0 ? (clampedCount / requiredFullness) * 100 : 0;
+      fullnessBarEl.style.width = `${pct}%`;
+      if (fullnessTextEl) {
+        fullnessTextEl.innerText = `${clampedCount} / ${requiredFullness}`;
+      }
+    }
+
+    function getAnimalScale() {
+      return 1 + Math.min(1, fullness / Math.max(1, requiredFullness)) * 1.5;
+    }
+
+    function getAnimalRadius(scale = getAnimalScale()) {
+      return BASE_ANIMAL_RADIUS * scale;
+    }
+
+    function renderAnimal() {
+      const currentScale = getAnimalScale();
+      headPointerEl.style.left = `${animalState.x}px`;
+      headPointerEl.style.top = `${animalState.y}px`;
+      animalEl.style.left = `${animalState.x}px`;
+      animalEl.style.top = `${animalState.y}px`;
+      animalEl.style.transform = `translate(-50%, -50%) scaleX(${isFlipped ? -currentScale : currentScale}) scaleY(${currentScale})`;
+    }
+
+    function distToSegment(px, py, x1, y1, x2, y2) {
+      const dx = x2 - x1;
+      const dy = y2 - y1;
+      const lenSq = dx * dx + dy * dy;
+      if (lenSq === 0) return Math.hypot(px - x1, py - y1);
+      const t = Math.max(0, Math.min(1, ((px - x1) * dx + (py - y1) * dy) / lenSq));
+      return Math.hypot(px - (x1 + t * dx), py - (y1 + t * dy));
+    }
+
+    function getFoodMetrics(scale = foodSizePercent / 100) {
+      const bgSize = Math.round(BASE_FOOD_BG_SIZE * scale);
+      return {
+        scale,
+        bgSize,
+        emojiSize: Math.round(BASE_FOOD_EMOJI_SIZE * scale),
+        radius: bgSize / 2
+      };
+    }
+
+    function applyFoodSizeToElement(food, metrics = getFoodMetrics()) {
+      if (food.bgEl) {
+        food.bgEl.style.width = `${metrics.bgSize}px`;
+        food.bgEl.style.height = `${metrics.bgSize}px`;
+      }
+      if (food.emojiEl) {
+        food.emojiEl.style.fontSize = `${metrics.emojiSize}px`;
+      }
+      food.size = metrics.bgSize;
+    }
+
+    function updateAllFoodsSize() {
+      const metrics = getFoodMetrics();
+      for (const food of foods) {
+        applyFoodSizeToElement(food, metrics);
+      }
+    }
+
+    function saveSettings() {
+      const settings = {
+        gainX, gainY, deadzoneLevel, smoothingLevel, jitterLevel, reverseX,
+        showCamera, assistEnabled, assistRadius, requiredFullness, maxFoodsOnScreen, foodSizePercent, bgmVolumeLevel, seVolumeLevel
+      };
+      localStorage.setItem('pakupakuCameraSettingsV2', JSON.stringify(settings));
+    }
+
+    function applySettingsToUI() {
+      document.getElementById('sens-x-slider').value = gainX;
+      document.getElementById('sens-x-val').innerText = gainX;
+      document.getElementById('sens-y-slider').value = gainY;
+      document.getElementById('sens-y-val').innerText = gainY;
+      document.getElementById('dead-slider').value = deadzoneLevel;
+      document.getElementById('dead-val').innerText = deadzoneLevel;
+      document.getElementById('smooth-slider').value = smoothingLevel;
+      document.getElementById('smooth-val').innerText = smoothingLevel;
+      document.getElementById('jitter-slider').value = jitterLevel;
+      document.getElementById('jitter-val').innerText = jitterLevel;
+
+      document.getElementById('flip-x-checkbox').checked = reverseX;
+      const fxVal = document.getElementById('flip-x-val');
+      fxVal.innerText = reverseX ? '反転' : '通常';
+      fxVal.style.color = reverseX ? '#ef4444' : '#ffffff';
+
+      document.getElementById('camera-checkbox').checked = showCamera;
+      const camVal = document.getElementById('camera-val');
+      camVal.innerText = showCamera ? '表示する' : '非表示';
+      camVal.style.color = showCamera ? '#ffffff' : '#9ca3af';
+      videoContainer.style.opacity = showCamera ? '1' : '0';
+
+      document.getElementById('assist-enabled-checkbox').checked = assistEnabled;
+      const assistEnabledVal = document.getElementById('assist-enabled-val');
+      assistEnabledVal.innerText = assistEnabled ? 'ON' : 'OFF';
+      assistEnabledVal.style.color = assistEnabled ? '#f472b6' : '#9ca3af';
+
+      const assistSliderEl = document.getElementById('assist-slider');
+      const assistValEl = document.getElementById('assist-val');
+      assistSliderEl.value = assistRadius;
+      assistSliderEl.disabled = !assistEnabled;
+      assistSliderEl.style.opacity = assistEnabled ? '1' : '0.4';
+      assistSliderEl.style.cursor = assistEnabled ? 'pointer' : 'not-allowed';
+      assistValEl.innerText = assistRadius;
+      assistValEl.style.opacity = assistEnabled ? '1' : '0.4';
+      document.getElementById('goal-slider').value = requiredFullness;
+      document.getElementById('goal-val').innerText = requiredFullness + '個';
+      document.getElementById('food-count-slider').value = maxFoodsOnScreen;
+      document.getElementById('food-count-val').innerText = maxFoodsOnScreen + '個';
+      document.getElementById('food-size-slider').value = foodSizePercent;
+      document.getElementById('food-size-val').innerText = foodSizePercent + '%';
+      document.getElementById('bgm-volume-slider').value = bgmVolumeLevel;
+      document.getElementById('bgm-volume-val').innerText = bgmVolumeLevel + '%';
+      document.getElementById('se-volume-slider').value = seVolumeLevel;
+      document.getElementById('se-volume-val').innerText = seVolumeLevel + '%';
+      updateFullnessUI(fullness);
+      applyBgmVolume();
+      applySeVolume();
+    }
+
+    function loadSettings() {
+      const saved = localStorage.getItem('pakupakuCameraSettingsV2');
+      if (saved) {
+        try {
+          const s = JSON.parse(saved);
+          if (s.gainX !== undefined) gainX = s.gainX;
+          if (s.gainY !== undefined) gainY = s.gainY;
+          if (s.deadzoneLevel !== undefined) deadzoneLevel = s.deadzoneLevel;
+          if (s.smoothingLevel !== undefined) smoothingLevel = s.smoothingLevel;
+          if (s.jitterLevel !== undefined) jitterLevel = s.jitterLevel;
+          if (s.reverseX !== undefined) reverseX = s.reverseX;
+          if (s.showCamera !== undefined) showCamera = s.showCamera;
+          if (s.assistEnabled !== undefined) assistEnabled = s.assistEnabled;
+          if (s.assistRadius !== undefined) {
+            if (s.assistRadius === 0) {
+              if (s.assistEnabled === undefined) assistEnabled = false;
+              assistRadius = 280;
+            } else {
+              assistRadius = s.assistRadius;
+            }
+          }
+          if (s.requiredFullness !== undefined) requiredFullness = s.requiredFullness;
+          if (s.maxFoodsOnScreen !== undefined) maxFoodsOnScreen = s.maxFoodsOnScreen;
+          if (s.foodSizePercent !== undefined) {
+            const parsedFoodSize = parseInt(s.foodSizePercent, 10);
+            if (!Number.isNaN(parsedFoodSize)) {
+              foodSizePercent = clamp(parsedFoodSize, FOOD_SIZE_MIN, FOOD_SIZE_MAX);
+            }
+          }
+          const legacyVolume = s.volumeLevel !== undefined ? parseInt(s.volumeLevel, 10) : NaN;
+          if (s.bgmVolumeLevel !== undefined) {
+            const parsedBgmVol = parseInt(s.bgmVolumeLevel, 10);
+            if (!Number.isNaN(parsedBgmVol)) bgmVolumeLevel = clamp(parsedBgmVol, 0, 100);
+          } else if (!Number.isNaN(legacyVolume)) {
+            bgmVolumeLevel = clamp(legacyVolume, 0, 100);
+          }
+          if (s.seVolumeLevel !== undefined) {
+            const parsedSeVol = parseInt(s.seVolumeLevel, 10);
+            if (!Number.isNaN(parsedSeVol)) seVolumeLevel = clamp(parsedSeVol, 0, 100);
+          } else if (!Number.isNaN(legacyVolume)) {
+            seVolumeLevel = clamp(legacyVolume, 0, 100);
+          }
+        } catch(e) { console.error('設定の読み込みに失敗', e); }
+      }
+      applySettingsToUI();
+      updateAllFoodsSize();
+    }
+
+    function createParticle(x, y, color = '✨', amount = 5) {
+      for(let i = 0; i < amount; i++) {
+        const particle = document.createElement('div');
+        particle.innerText = color;
+        particle.style.position = 'absolute'; 
+        particle.style.left = `${x}px`; particle.style.top = `${y}px`;
+        particle.style.fontSize = (20 + Math.random() * 20) + 'px'; 
+        particle.style.pointerEvents = 'none';
+        particle.style.transition = 'all 0.8s cubic-bezier(0.1, 0.8, 0.3, 1)';
+        particle.style.transform = 'translate(-50%, -50%) scale(0.5)';
+        particle.style.zIndex = '99999';
+        
+        document.getElementById('game-wrapper').appendChild(particle);
+        
+        setTimeout(() => {
+          const angle = Math.random() * Math.PI * 2;
+          const dist = 80 + Math.random() * 250; 
+          particle.style.left = `${x + Math.cos(angle) * dist}px`;
+          particle.style.top = `${y + Math.sin(angle) * dist + 100}px`; 
+          particle.style.opacity = '0';
+          const rot = (Math.random() - 0.5) * 720;
+          particle.style.transform = `translate(-50%, -50%) scale(${Math.random() * 1.5 + 0.5}) rotate(${rot}deg)`;
+        }, 15); 
+        
+        setTimeout(() => particle.remove(), 800);
+      }
+    }
+
+    function spawnFood() {
+      if (foods.length >= maxFoodsOnScreen) return;
+
+      const currentAnimal = ANIMAL_DATA[currentAnimalIndex];
+      const emoji = currentAnimal.foods[Math.floor(Math.random() * currentAnimal.foods.length)];
+      const metrics = getFoodMetrics();
+      const foodRadius = metrics.radius;
+      
+      let x, y;
+      let valid = false;
+      let attempts = 0;
+      const padding = Math.max(60, Math.ceil(foodRadius) + 15);
+      
+      const w = GAME_WIDTH;
+      const h = GAME_HEIGHT;
+
+      const camRect = showCamera ? { xMin: w - 260, xMax: w, yMin: h - 200, yMax: h } : null;
+      const ctrlRect = { xMin: w - 290, xMax: w, yMin: 0, yMax: 240 };
+      const titleRect = isTitleScreen ? { xMin: w / 2 - 470, xMax: w / 2 + 470, yMin: 0, yMax: 210 } : null;
+      const uiBottomEl = document.getElementById('ui-bottom');
+      const gaugeRect = !isTitleScreen
+        ? (uiBottomEl && uiBottomEl.offsetHeight > 0
+            ? {
+                xMin: uiBottomEl.offsetLeft - uiBottomEl.offsetWidth / 2,
+                xMax: uiBottomEl.offsetLeft + uiBottomEl.offsetWidth / 2,
+                yMin: uiBottomEl.offsetTop,
+                yMax: h
+              }
+            : { xMin: w / 2 - 300, xMax: w / 2 + 300, yMin: h - 190, yMax: h })
+        : null;
+      const maxY = isTitleScreen ? h - Math.max(180, Math.ceil(foodRadius) + 130) : h - padding;
+      const rectMargin = Math.max(40, Math.ceil(foodRadius * 1.15) + 16);
+      const minAnimalDist = Math.max(150, getAnimalRadius() + foodRadius + 40);
+      const minFoodDist = Math.max(350, foodRadius * 2 + 80);
+
+      const inRect = (px, py, rect) => (
+        rect &&
+        px > rect.xMin - rectMargin &&
+        px < rect.xMax + rectMargin &&
+        py > rect.yMin - rectMargin &&
+        py < rect.yMax + rectMargin
+      );
+      const overlapsUi = (px, py) => (
+        inRect(px, py, camRect) ||
+        inRect(px, py, ctrlRect) ||
+        inRect(px, py, titleRect) ||
+        inRect(px, py, gaugeRect)
+      );
+
+      while (!valid && attempts < 150) {
+        x = padding + Math.random() * (w - padding * 2);
+        const randomY = Math.random() * Math.random();
+        y = padding + randomY * (maxY - padding);
+
+        let tooClose = overlapsUi(x, y);
+
+        if (!tooClose && Math.hypot(animalState.x - x, animalState.y - y) < minAnimalDist) tooClose = true;
+
+        if (!tooClose) {
+          for (const f of foods) {
+            if (Math.hypot(f.x - x, f.y - y) < minFoodDist) tooClose = true;
+          }
+        }
+
+        if (!tooClose) valid = true;
+        attempts++;
+      }
+
+      if (!valid) {
+        for (let i = 0; i < 100; i++) {
+          const fx = padding + Math.random() * (w - padding * 2);
+          const fy = padding + Math.random() * (maxY - padding);
+          if (!overlapsUi(fx, fy)) {
+            x = fx;
+            y = fy;
+            valid = true;
+            break;
+          }
+        }
+        if (!valid && gaugeRect && inRect(x, y, gaugeRect)) {
+          y = Math.max(padding, gaugeRect.yMin - rectMargin);
+        }
+      }
+      
+      const containerEl = document.createElement('div');
+      containerEl.className = 'food-container';
+      containerEl.style.left = `${x}px`;
+      containerEl.style.top = `${y}px`;
+      
+      const bgEl = document.createElement('div');
+      bgEl.className = 'food-bg';
+      
+      const emojiEl = document.createElement('div');
+      emojiEl.className = 'food-emoji';
+      emojiEl.innerText = emoji;
+      
+      bgEl.appendChild(emojiEl);
+      containerEl.appendChild(bgEl);
+      foodsLayer.appendChild(containerEl);
+      
+      const food = { x: x, y: y, size: metrics.bgSize, containerEl: containerEl, bgEl: bgEl, emojiEl: emojiEl, emoji: emoji };
+      applyFoodSizeToElement(food, metrics);
+      foods.push(food);
+    }
+
+    const MILESTONE_MESSAGES = [
+      'いい調子！✨',
+      'すごい！🌟',
+      'どんどん食べよう！🎵',
+      '大活躍！🎉'
+    ];
+
+    function showMilestoneMessage(count, isEvolving = false) {
+      const msgIndex = (Math.floor(count / 10) - 1) % MILESTONE_MESSAGES.length;
+      const praise = MILESTONE_MESSAGES[Math.max(0, msgIndex)];
+      const textEl = document.createElement('div');
+      textEl.className = 'milestone-text';
+      if (isEvolving) {
+        textEl.style.top = '36%';
+      }
+      textEl.innerText = `${count}個パクパク！ ${praise}`;
+      document.getElementById('game-container').appendChild(textEl);
+      setTimeout(() => textEl.remove(), 1800);
+    }
+
+    function evolve() {
+      if (currentAnimalIndex >= ANIMAL_DATA.length - 1) {
+        isGameCleared = true; syncBgm({ restart: true }); playClearSound();
+        createParticle(animalState.x, animalState.y, '🌈', 30); createParticle(animalState.x, animalState.y, '👼', 10);
+        setTimeout(() => {
+          if (!isGameCleared) return;
+          document.getElementById('clear-screen').style.display = 'flex';
+          document.getElementById('ui-bottom').style.display = 'none';
+          controlsContainer.style.display = 'none';
+          closeSettingsModal();
+        }, 1000);
+        return;
+      }
+      currentAnimalIndex++; updateAnimalTheme(); playEvolveSound();
+      fullness = 0;
+      createParticle(animalState.x, animalState.y, '🌟', 15); createParticle(animalState.x, animalState.y, '🎉', 10);
+      const textEl = document.createElement('div'); textEl.className = 'evolution-text'; textEl.innerText = '進化！';
+      document.getElementById('game-container').appendChild(textEl); setTimeout(() => textEl.remove(), 2000);
+      foods.forEach(f => f.containerEl.remove()); foods.length = 0;
+      for(let i=0; i<maxFoodsOnScreen; i++) spawnFood();
+    }
+
+    const clamp = (val, min, max) => Math.max(min, Math.min(max, val));
+
+    /* ---------- 一番手前の顔をえらぶ (sub_6a6d1b2a78cfa.htmlより) ---------- */
+    function faceSizeOf(lm) {
+      const top = lm[10], chin = lm[152], le = lm[234], re = lm[454];
+      const w = Math.abs(re.x - le.x), h = Math.abs(chin.y - top.y);
+      return { w, h, area: w * h, cx: (le.x + re.x) / 2, cy: (top.y + chin.y) / 2 };
+    }
+
+    function pickFace(faces, now) {
+      if (!faces || !faces.length) return -1;
+      const boxes = faces.map(faceSizeOf);
+      let best = -1, bestScore = -1;
+      for (let i = 0; i < boxes.length; i++) {
+        let score = boxes[i].area;
+        if (lockedFace && (now - faceLostAt) < FACE_LOST_MS) {
+          const d = Math.hypot(boxes[i].cx - lockedFace.cx, boxes[i].cy - lockedFace.cy);
+          if (d < 0.18) score *= FACE_HOLD_BONUS;
+        }
+        if (score > bestScore) { bestScore = score; best = i; }
+      }
+      return best;
+    }
+
+    function applyDeadzone(v, dz) {
+      const a = Math.abs(v);
+      if (a <= dz) return 0;
+      return Math.sign(v) * (a - dz) / (1 - dz);
+    }
+
+    function getStableNosePoint(lm) {
+      // 表情で動きにくい鼻先〜鼻根ラインの複数ランドマークを平均化し検出ジッターを抑える
+      const indices = [1, 4, 5, 6, 168, 195];
+      let sx = 0, sy = 0, count = 0;
+      for (const idx of indices) {
+        const pt = lm[idx];
+        if (pt) { sx += pt.x; sy += pt.y; count++; }
+      }
+      if (count === 0) return { x: 1 - lm[1].x, y: lm[1].y };
+      return { x: 1 - (sx / count), y: sy / count };
+    }
+
+    function track(now) {
+      if (!landmarker || videoElement.readyState < 2) return;
+      if (videoElement.currentTime === lastVideoTime) return;
+      lastVideoTime = videoElement.currentTime;
+      const res = landmarker.detectForVideo(videoElement, now);
+      const faces = res.faceLandmarks || [];
+      const idx = pickFace(faces, now);
+      const lm = idx >= 0 ? faces[idx] : null;
+
+      faceCount = faces.length;
+
+      if (lm) {
+        const pt = getStableNosePoint(lm);
+        rawHead = jitterLevel > 0
+          ? { x: medianOfLast3(headHistoryX, pt.x), y: medianOfLast3(headHistoryY, pt.y) }
+          : pt;
+        lastHeadSampleSec = now / 1000;
+        headSampleUpdated = true;
+        const b = faceSizeOf(lm);
+        faceBox = { cx: b.cx, cy: b.cy, w: b.w, h: b.h };
+        lockedFace = { cx: b.cx, cy: b.cy };
+        faceLostAt = now;
+        if (!calib) {
+          calib = { x: rawHead.x, y: rawHead.y };
+        }
+        faceSeen = true;
+      } else {
+        if (faceSeen) resetStabilizer(true);
+        faceSeen = false;
+        faceBox = null;
+      }
+    }
+
+    function drawCamPreview(now) {
+      videoContainer.classList.toggle('face-seen', faceSeen);
+      camBadgeEl.classList.toggle('hidden', !(faceSeen && faceCount > 1));
+      if (!isAiLoaded) {
+        if (camLostOverlayEl.dataset.state !== 'loading') {
+          camLostOverlayEl.dataset.state = 'loading';
+          camLostOverlayEl.innerHTML = 'AI準備中...';
+        }
+      } else {
+        if (camLostOverlayEl.dataset.state !== 'lost') {
+          camLostOverlayEl.dataset.state = 'lost';
+          camLostOverlayEl.innerHTML = 'かおが見えません';
+        }
+      }
+      camLostOverlayEl.classList.toggle('hidden', faceSeen);
+
+      if (!showCamera) return;
+
+      const cw = camPreviewCanvas.width;
+      const ch = camPreviewCanvas.height;
+      camPreviewCtx.clearRect(0, 0, cw, ch);
+
+      if (videoElement.readyState >= 2 && videoElement.videoWidth > 0) {
+        const vw = videoElement.videoWidth;
+        const vh = videoElement.videoHeight;
+        const scale = Math.max(cw / vw, ch / vh);
+        const dw = vw * scale;
+        const dh = vh * scale;
+        const dx = (cw - dw) / 2;
+        const dy = (ch - dh) / 2;
+
+        camPreviewCtx.save();
+        camPreviewCtx.translate(cw, 0);
+        camPreviewCtx.scale(-1, 1);
+        camPreviewCtx.drawImage(videoElement, dx, dy, dw, dh);
+
+        if (faceSeen && faceBox) {
+          const fx = dx + faceBox.cx * dw;
+          const fy = dy + faceBox.cy * dh;
+          const rr = Math.max(faceBox.w * dw, faceBox.h * dh) * 0.72;
+          const pulse = 1 + Math.sin(now / 260) * 0.06;
+          const R = rr * pulse;
+          const c = R * 0.5;
+
+          camPreviewCtx.save();
+          camPreviewCtx.translate(fx, fy);
+          camPreviewCtx.scale(-1, 1);
+          camPreviewCtx.lineWidth = 3;
+          camPreviewCtx.strokeStyle = "#ffd879";
+          camPreviewCtx.shadowColor = "rgba(255,216,121,.9)";
+          camPreviewCtx.shadowBlur = 8;
+          for (let i = 0; i < 4; i++) {
+            const sx2 = (i % 2 ? 1 : -1), sy2 = (i < 2 ? -1 : 1);
+            camPreviewCtx.beginPath();
+            camPreviewCtx.moveTo(sx2 * R, sy2 * R - sy2 * c);
+            camPreviewCtx.lineTo(sx2 * R, sy2 * R);
+            camPreviewCtx.lineTo(sx2 * R - sx2 * c, sy2 * R);
+            camPreviewCtx.stroke();
+          }
+          camPreviewCtx.restore();
+        }
+        camPreviewCtx.restore();
+      } else {
+        camPreviewCtx.fillStyle = "#1a2450";
+        camPreviewCtx.fillRect(0, 0, cw, ch);
+      }
+    }
+
+    function recenterHead() {
+      if (rawHead) {
+        calib = { x: rawHead.x, y: rawHead.y };
+        resetStabilizer();
+        createParticle(animalState.x, animalState.y, '🎯', 6);
+      }
+    }
+
+    function openSettingsModal() {
+      if (isSettingsOpen) return;
+      isSettingsOpen = true;
+      settingsModal.style.display = 'flex';
+      if ((isGameStarted || isCountingDown) && !isGameCleared && !isPaused) {
+        isPaused = true;
+        pausedBySettings = true;
+      } else {
+        pausedBySettings = false;
+      }
+    }
+
+    function closeSettingsModal() {
+      if (!isSettingsOpen) return;
+      isSettingsOpen = false;
+      settingsModal.style.display = 'none';
+      if (pausedBySettings && (isGameStarted || isCountingDown) && !isGameCleared && document.getElementById('fullscreen-prompt-screen').style.display !== 'flex') {
+        isPaused = false;
+      }
+      pausedBySettings = false;
+    }
+
+    function gameLoop(now) {
+      const dt = now - (lastTick || now - 16.667);
+      lastTick = now;
+      frameScale = Math.min(2, dt / 16.667);
+
+      if (isAiLoaded) {
+        track(now);
+      }
+      drawCamPreview(now);
+
+      if (isGameCleared || (!isGameStarted && !isTitleScreen) || isPaused) {
+        requestAnimationFrame(gameLoop);
+        return;
+      }
+
+      if (!faceSeen) {
+        requestAnimationFrame(gameLoop);
+        return;
+      }
+
+      const maxGameY = GAME_HEIGHT - 60;
+      const prevAnimalX = animalState.x;
+      const prevAnimalY = animalState.y;
+
+      // 頭の動き -> キャラクター位置（ぶれ軽減 + 吸い付きアシスト付き）
+      if (rawHead && calib) {
+        const dz = deadzoneLevel / 100;
+        const alpha = 1 - Math.pow(1 - (0.55 - smoothingLevel * 0.05), frameScale);
+        let ox = applyDeadzone(rawHead.x - calib.x, dz) * gainX;
+        let oy = applyDeadzone(rawHead.y - calib.y, dz) * gainY;
+        if (reverseX) ox = -ox;
+
+        const unfilteredX = clamp((0.5 + ox) * GAME_WIDTH, 60, GAME_WIDTH - 60);
+        const unfilteredY = clamp((0.55 + oy) * GAME_HEIGHT, 60, maxGameY);
+
+        if (jitterLevel <= 0) {
+          stableTarget = { x: unfilteredX, y: unfilteredY };
+        } else if (!stableTarget || headSampleUpdated) {
+          const tSec = lastHeadSampleSec || (now / 1000);
+          const minCutoff = Math.max(0.015, 1.8 * Math.pow(0.88, jitterLevel));
+          const beta = Math.max(0.0015, 0.012 - jitterLevel * 0.00022);
+          const velDeadzone = jitterLevel * 10;
+          const fx = targetFilterX.filter(unfilteredX, tSec, minCutoff, beta, 1.0, velDeadzone);
+          const fy = targetFilterY.filter(unfilteredY, tSec, minCutoff, beta, 1.0, velDeadzone);
+
+          if (!stableTarget) {
+            stableTarget = { x: fx, y: fy };
+          } else {
+            const dx = fx - stableTarget.x;
+            const dy = fy - stableTarget.y;
+            const d = Math.hypot(dx, dy);
+            const deadPx = jitterLevel * 3.0;
+            if (d > deadPx) {
+              const ratio = (d - deadPx) / d;
+              stableTarget.x += dx * ratio;
+              stableTarget.y += dy * ratio;
+            }
+          }
+          headSampleUpdated = false;
+        }
+
+        const rawTargetX = clamp(stableTarget.x, 60, GAME_WIDTH - 60);
+        const rawTargetY = clamp(stableTarget.y, 60, maxGameY);
+
+        let targetFood = null;
+        let minDistance = Infinity;
+        if (assistEnabled && assistRadius > 0) {
+          for (const food of foods) {
+            const dist = Math.hypot(rawTargetX - food.x, rawTargetY - food.y);
+            if (dist < assistRadius && dist < minDistance) {
+              minDistance = dist;
+              targetFood = food;
+            }
+          }
+        }
+
+        currentSnappedFood = targetFood;
+        let targetX = rawTargetX;
+        let targetY = rawTargetY;
+        let moveAlpha = alpha;
+
+        if (currentSnappedFood) {
+          targetX = currentSnappedFood.x;
+          targetY = currentSnappedFood.y;
+          headPointerEl.classList.add('looking');
+          moveAlpha = Math.max(alpha, 1 - Math.pow(1 - 0.15, frameScale));
+        } else {
+          headPointerEl.classList.remove('looking');
+        }
+
+        animalState.x += (targetX - animalState.x) * moveAlpha;
+        animalState.y += (targetY - animalState.y) * moveAlpha;
+      } else {
+        currentSnappedFood = null;
+        headPointerEl.classList.remove('looking');
+      }
+
+      for (const food of foods) {
+        if (food.bgEl) {
+          food.bgEl.classList.toggle('snapped', food === currentSnappedFood);
+        }
+      }
+
+      if (animalState.x > lastFlipX + 15) { isFlipped = false; lastFlipX = animalState.x; }
+      else if (animalState.x < lastFlipX - 15) { isFlipped = true; lastFlipX = animalState.x; }
+
+      // 当たり判定（触れて食べる）
+      const animalRadius = getAnimalRadius();
+      for (let i = foods.length - 1; i >= 0; i--) {
+        const food = foods[i];
+        const foodVisualRadius = (food.size / 2) * (food === currentSnappedFood ? 1.15 : 1);
+        const eatDist = animalRadius + foodVisualRadius;
+        if (distToSegment(food.x, food.y, prevAnimalX, prevAnimalY, animalState.x, animalState.y) < eatDist) {
+          createParticle(food.x, food.y, '✨', 5);
+          food.containerEl.remove();
+          foods.splice(i, 1);
+          playEatSound(currentAnimalIndex);
+          if (isTitleScreen) {
+            spawnFood();
+          } else if (isGameStarted) {
+            fullness++;
+            if (fullness >= requiredFullness) {
+              updateFullnessUI(requiredFullness);
+              if (fullness % 10 === 0 && currentAnimalIndex < ANIMAL_DATA.length - 1) {
+                showMilestoneMessage(fullness, true);
+              }
+              evolve();
+              if (fullnessResetTimer) clearTimeout(fullnessResetTimer);
+              fullnessResetTimer = setTimeout(() => {
+                fullnessResetTimer = null;
+                if (!isGameCleared && fullness === 0) updateFullnessUI(0);
+              }, 500);
+              break;
+            } else {
+              updateFullnessUI(fullness);
+              if (fullness % 10 === 0) {
+                showMilestoneMessage(fullness, false);
+              }
+              spawnFood();
+            }
+          }
+        }
+      }
+
+      renderAnimal();
+
+      requestAnimationFrame(gameLoop);
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      let audioUnlocked = false;
+      const unlockAudio = async () => {
+        if (!audioUnlocked) {
+          try {
+            await Tone.start();
+            if (Tone.context.state === 'running') {
+              initAudio();
+              applySeVolume();
+              audioUnlocked = true;
+            }
+          } catch (err) {
+            console.error('Audio unlock deferred:', err);
+          }
+        }
+        syncBgm();
+      };
+
+      const onUserGesture = () => {
+        const desiredKey = getDesiredBgmKey();
+        if (!audioUnlocked || (desiredKey && bgmPlayers[desiredKey].paused)) {
+          unlockAudio();
+        }
+      };
+      document.addEventListener('pointerdown', onUserGesture);
+      document.addEventListener('keydown', onUserGesture);
+      document.addEventListener('click', onUserGesture);
+      document.addEventListener('visibilitychange', () => syncBgm());
+
+      let isStartingCamera = false;
+      const startCameraAndAI = async (showAlertOnError = false) => {
+        if (isStartingCamera) return;
+        isStartingCamera = true;
+        try {
+          if (!videoElement.srcObject) {
+            const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } }, audio: false });
+            videoElement.srcObject = stream;
+            videoElement.muted = true;
+            await videoElement.play();
+          }
+          if (!landmarker) {
+            await initFaceLandmarker();
+          }
+        } catch (err) {
+          console.error(err);
+          document.getElementById('pre-start-screen').style.display = 'flex';
+          syncBgm();
+          if (showAlertOnError) {
+            if (err && (err.name === "NotAllowedError" || err.name === "SecurityError")) {
+              alert('カメラの使用が許可されませんでした。アドレスバーのカメラアイコンから許可して、もう一度お試しください。');
+            } else if (err && err.name === "NotFoundError") {
+              alert('カメラが見つかりませんでした。接続をご確認ください。');
+            } else {
+              alert('カメラへのアクセスに失敗しました。ブラウザの設定をご確認ください。');
+            }
+          }
+        } finally {
+          isStartingCamera = false;
+        }
+      };
+
+      document.getElementById('pre-start-btn').addEventListener('click', async () => {
+        document.getElementById('pre-start-screen').style.display = 'none';
+        await unlockAudio();
+        startCameraAndAI(true);
+      });
+
+      // ページを開いたら即座にタイトル画面を表示し、カメラとAIの起動を始める
+      loadSettings();
+      if (showCamera) videoContainer.style.opacity = '1';
+      document.getElementById('start-screen').style.display = 'flex';
+      controlsContainer.style.display = 'flex';
+      backToTitleBtn.style.display = 'none';
+      isTitleScreen = true;
+      renderAnimal();
+      foods.forEach(f => f.containerEl.remove());
+      foods.length = 0;
+      for (let i = 0; i < maxFoodsOnScreen; i++) spawnFood();
+      syncBgm({ restart: true });
+      requestAnimationFrame(gameLoop);
+      startCameraAndAI(false);
+
+      // Settings Modal Open / Close
+      document.getElementById('settings-btn').addEventListener('click', () => {
+        if (isSettingsOpen) closeSettingsModal();
+        else openSettingsModal();
+      });
+      document.getElementById('close-settings-btn').addEventListener('click', closeSettingsModal);
+      settingsModal.addEventListener('click', (e) => {
+        if (e.target === settingsModal) closeSettingsModal();
+      });
+
+      // Settings Listeners
+      document.getElementById('sens-x-slider').addEventListener('input', (e) => {
+        gainX = parseInt(e.target.value);
+        document.getElementById('sens-x-val').innerText = gainX;
+        resetStabilizer();
+        saveSettings();
+      });
+      document.getElementById('sens-y-slider').addEventListener('input', (e) => {
+        gainY = parseInt(e.target.value);
+        document.getElementById('sens-y-val').innerText = gainY;
+        resetStabilizer();
+        saveSettings();
+      });
+      document.getElementById('dead-slider').addEventListener('input', (e) => {
+        deadzoneLevel = parseInt(e.target.value);
+        document.getElementById('dead-val').innerText = deadzoneLevel;
+        resetStabilizer();
+        saveSettings();
+      });
+      document.getElementById('smooth-slider').addEventListener('input', (e) => {
+        smoothingLevel = parseInt(e.target.value);
+        document.getElementById('smooth-val').innerText = smoothingLevel;
+        saveSettings();
+      });
+      document.getElementById('jitter-slider').addEventListener('input', (e) => {
+        jitterLevel = parseInt(e.target.value);
+        document.getElementById('jitter-val').innerText = jitterLevel;
+        resetStabilizer();
+        saveSettings();
+      });
+      document.getElementById('flip-x-checkbox').addEventListener('change', (e) => {
+        reverseX = e.target.checked;
+        const valEl = document.getElementById('flip-x-val');
+        valEl.innerText = reverseX ? '反転' : '通常';
+        valEl.style.color = reverseX ? '#ef4444' : '#ffffff';
+        resetStabilizer();
+        saveSettings();
+      });
+
+      document.getElementById('assist-enabled-checkbox').addEventListener('change', (e) => {
+        assistEnabled = e.target.checked;
+        applySettingsToUI();
+        saveSettings();
+      });
+
+      document.getElementById('assist-slider').addEventListener('input', (e) => {
+        assistRadius = parseInt(e.target.value);
+        document.getElementById('assist-val').innerText = assistRadius;
+        saveSettings();
+      });
+
+      document.getElementById('goal-slider').addEventListener('input', (e) => {
+        requiredFullness = parseInt(e.target.value);
+        document.getElementById('goal-val').innerText = requiredFullness + '個';
+        updateFullnessUI(fullness);
+        saveSettings();
+      });
+
+      document.getElementById('food-count-slider').addEventListener('input', (e) => { 
+        maxFoodsOnScreen = parseInt(e.target.value); 
+        document.getElementById('food-count-val').innerText = maxFoodsOnScreen + '個'; 
+        saveSettings(); 
+        if (foods.length > maxFoodsOnScreen) {
+          while(foods.length > maxFoodsOnScreen) { const f = foods.pop(); f.containerEl.remove(); }
+        } else {
+          for(let i=foods.length; i<maxFoodsOnScreen; i++) spawnFood();
+        }
+      });
+
+      document.getElementById('food-size-slider').addEventListener('input', (e) => {
+        foodSizePercent = clamp(parseInt(e.target.value, 10), FOOD_SIZE_MIN, FOOD_SIZE_MAX);
+        document.getElementById('food-size-val').innerText = foodSizePercent + '%';
+        updateAllFoodsSize();
+        saveSettings();
+      });
+
+      document.getElementById('bgm-volume-slider').addEventListener('input', (e) => {
+        bgmVolumeLevel = clamp(parseInt(e.target.value, 10), 0, 100);
+        document.getElementById('bgm-volume-val').innerText = bgmVolumeLevel + '%';
+        applyBgmVolume();
+        syncBgm();
+        saveSettings();
+      });
+
+      document.getElementById('se-volume-slider').addEventListener('input', (e) => {
+        seVolumeLevel = clamp(parseInt(e.target.value, 10), 0, 100);
+        document.getElementById('se-volume-val').innerText = seVolumeLevel + '%';
+        applySeVolume();
+        saveSettings();
+        if (seVolumeLevel > 0) {
+          if (audioUnlocked) {
+            playSePreviewSound();
+          } else {
+            unlockAudio().then(() => playSePreviewSound());
+          }
+        }
+      });
+
+      document.getElementById('camera-checkbox').addEventListener('change', (e) => {
+        showCamera = e.target.checked;
+        const valEl = document.getElementById('camera-val');
+        valEl.innerText = showCamera ? '表示する' : '非表示';
+        valEl.style.color = showCamera ? '#ffffff' : '#9ca3af';
+        videoContainer.style.opacity = showCamera ? '1' : '0';
+        saveSettings();
+      });
+
+      const resetStageState = () => {
+        if (fullnessResetTimer) {
+          clearTimeout(fullnessResetTimer);
+          fullnessResetTimer = null;
+        }
+        document.querySelectorAll('.milestone-text, .evolution-text').forEach(el => el.remove());
+        fullness = 0;
+        currentAnimalIndex = 0;
+        animalState.x = centerX;
+        animalState.y = centerY;
+        isFlipped = false;
+        lastFlipX = centerX;
+        currentSnappedFood = null;
+        headPointerEl.classList.remove('looking');
+        resetStabilizer(true);
+        updateAnimalTheme();
+        updateFullnessUI(0);
+        renderAnimal();
+        foods.forEach(f => f.containerEl.remove());
+        foods.length = 0;
+        for (let i = 0; i < maxFoodsOnScreen; i++) spawnFood();
+      };
+
+      const startGameWithCountdown = () => {
+        cancelCountdown();
+        closeSettingsModal();
+        document.getElementById('start-screen').style.display = 'none';
+        document.getElementById('clear-screen').style.display = 'none';
+        isTitleScreen = false;
+        isGameCleared = false;
+        isGameStarted = false;
+        isCountingDown = true;
+        isPaused = false;
+        document.getElementById('ui-bottom').style.display = 'block';
+        controlsContainer.style.display = 'flex';
+        backToTitleBtn.style.display = 'block';
+
+        resetStageState();
+        syncBgm();
+
+        countdownRemainingMs = COUNTDOWN_DURATION_MS;
+        countdownLastStep = 3;
+        countdownLastTickTime = performance.now();
+        showCountdownStep('3', false);
+        playCountdownSound(3);
+
+        countdownIntervalId = setInterval(() => {
+          const now = performance.now();
+          const elapsed = now - countdownLastTickTime;
+          countdownLastTickTime = now;
+          if (!isCountingDown) return;
+          if (isPaused) return;
+
+          countdownRemainingMs = Math.max(0, countdownRemainingMs - elapsed);
+          if (countdownRemainingMs > 0) {
+            const step = Math.ceil(countdownRemainingMs / 1000);
+            if (step !== countdownLastStep && step >= 1) {
+              countdownLastStep = step;
+              showCountdownStep(String(step), false);
+              playCountdownSound(step);
+            }
+          } else {
+            clearInterval(countdownIntervalId);
+            countdownIntervalId = null;
+            isCountingDown = false;
+            isGameStarted = true;
+            resetStabilizer(true);
+            showCountdownStep('スタート！', true);
+            playCountdownSound(0);
+            syncBgm({ restart: true });
+            countdownGoHideTimer = setTimeout(() => {
+              countdownGoHideTimer = null;
+              const overlay = document.getElementById('countdown-overlay');
+              if (overlay && !isCountingDown) {
+                overlay.style.display = 'none';
+              }
+            }, 650);
+          }
+        }, 30);
+      };
+
+      document.getElementById('start-btn').addEventListener('click', startGameWithCountdown);
+
+      const backToTitle = () => {
+        cancelCountdown();
+        closeSettingsModal();
+        isGameStarted = false; isTitleScreen = true; isGameCleared = false; isPaused = false;
+        document.getElementById('ui-bottom').style.display = 'none';
+        controlsContainer.style.display = 'flex';
+        backToTitleBtn.style.display = 'none';
+        document.getElementById('clear-screen').style.display = 'none';
+        document.getElementById('start-screen').style.display = 'flex';
+        
+        resetStageState();
+        syncBgm({ restart: true });
+      };
+      backToTitleBtn.addEventListener('click', backToTitle);
+      document.getElementById('clear-back-to-title-btn').addEventListener('click', backToTitle);
+
+      document.getElementById('restart-btn').addEventListener('click', startGameWithCountdown);
+
+      document.getElementById('reset-center-btn').addEventListener('click', recenterHead);
+      document.getElementById('reset-center-btn-settings').addEventListener('click', recenterHead);
+
+      document.getElementById('reset-settings-btn').addEventListener('click', () => {
+        gainX = 14; gainY = 14; deadzoneLevel = 0; smoothingLevel = 5; jitterLevel = 5; reverseX = false;
+        showCamera = true; assistEnabled = true; assistRadius = 280; requiredFullness = 30; maxFoodsOnScreen = 3;
+        foodSizePercent = 100; bgmVolumeLevel = 70; seVolumeLevel = 70;
+        resetStabilizer();
+
+        applySettingsToUI();
+        syncBgm();
+        updateAllFoodsSize();
+        saveSettings();
+      });
+
+      const fsBtn = document.getElementById('fullscreen-btn');
+      const fsIconEnter = document.getElementById('fs-icon-enter');
+      const fsIconExit = document.getElementById('fs-icon-exit');
+
+      fsBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+          if (document.documentElement.requestFullscreen) {
+            document.documentElement.requestFullscreen().catch(err => {
+              alert("全画面表示エラー: " + err.message + "\n(お使いのブラウザやプレビュー環境では全画面表示が許可されていない可能性があります)");
+            });
+          } else if (document.documentElement.webkitRequestFullscreen) {
+            document.documentElement.webkitRequestFullscreen();
+          } else {
+            alert("このブラウザは全画面表示に対応していません。");
+          }
+        } else {
+          if (document.exitFullscreen) {
+            document.exitFullscreen();
+          } else if (document.webkitExitFullscreen) {
+            document.webkitExitFullscreen();
+          }
+        }
+      });
+
+      document.addEventListener('click', (e) => {
+        if (document.getElementById('pre-start-screen').style.display === 'flex') return;
+        if (e.target && e.target.closest) {
+          if (e.target.closest('input') || e.target.closest('#fullscreen-btn') || e.target.closest('button') || e.target.closest('#settings-panel')) return;
+        }
+        if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+          if (document.documentElement.requestFullscreen) {
+            document.documentElement.requestFullscreen().catch(err => {
+              console.error(err);
+            });
+          } else if (document.documentElement.webkitRequestFullscreen) {
+            document.documentElement.webkitRequestFullscreen();
+          }
+        }
+      });
+
+      const fullscreenChangeHandler = () => {
+        const promptScreen = document.getElementById('fullscreen-prompt-screen');
+        const promptTitle = document.getElementById('prompt-title');
+        const isFS = document.fullscreenElement || document.webkitFullscreenElement;
+        
+        if (isFS) {
+          fsIconEnter.classList.add('hidden');
+          fsIconExit.classList.remove('hidden');
+          
+          if (promptScreen.style.display === 'flex') {
+            promptScreen.style.display = 'none';
+            if (isTitleScreen || ((isGameStarted || isCountingDown) && !isGameCleared)) {
+              controlsContainer.style.display = 'flex';
+              if (!isSettingsOpen) {
+                isPaused = false;
+                if (isGameStarted || isCountingDown) {
+                  document.getElementById('ui-bottom').style.display = 'block';
+                }
+              }
+            }
+            syncBgm();
+          }
+        } else {
+          fsIconEnter.classList.remove('hidden');
+          fsIconExit.classList.add('hidden');
+          
+          if (isTitleScreen || ((isGameStarted || isCountingDown) && !isGameCleared)) {
+            if (!isPaused) {
+              isPaused = true;
+            }
+            if (isGameStarted || isCountingDown) {
+              document.getElementById('ui-bottom').style.display = 'none';
+            }
+            controlsContainer.style.display = 'none';
+            if (promptTitle) {
+              promptTitle.innerText = isTitleScreen ? "全画面表示が解除されました" : "ゲーム一時停止中";
+            }
+            promptScreen.style.display = 'flex';
+            syncBgm();
+          }
+        }
+      };
+      
+      document.addEventListener('fullscreenchange', fullscreenChangeHandler);
+      document.addEventListener('webkitfullscreenchange', fullscreenChangeHandler);
+    });
+
+    async function initFaceLandmarker() {
+      try {
+        const { FaceLandmarker, FilesetResolver } = await import("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14");
+        const fileset = await FilesetResolver.forVisionTasks(
+          "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm"
+        );
+        const options = {
+          baseOptions: {
+            modelAssetPath: "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task",
+            delegate: "GPU",
+          },
+          runningMode: "VIDEO",
+          numFaces: 4,
+          outputFaceBlendshapes: false,
+        };
+        try {
+          landmarker = await FaceLandmarker.createFromOptions(fileset, options);
+        } catch (e) {
+          options.baseOptions.delegate = "CPU";
+          landmarker = await FaceLandmarker.createFromOptions(fileset, options);
+        }
+
+        isAiLoaded = true;
+      } catch (err) {
+        console.error(err);
+        alert("AIの読み込みに失敗しました。ページをリロードしてください。");
+      }
+    }
+  </script>
+</body>
+</html>
